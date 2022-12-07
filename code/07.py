@@ -6,6 +6,8 @@ class Directory:
         self.size = 0
 
     def addChild(self, child):
+        if child in self.children:
+            return
         self.children[child.name] = child
         self.adjustSize(child.size)
 
