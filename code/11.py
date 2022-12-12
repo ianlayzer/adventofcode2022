@@ -2,15 +2,16 @@ import operator
 from functools import reduce
 
 class Monkey:
-    def __init__(self, id, startingItems, operation, testCondn, testConsq, testAltrn, monkeyMap):
+    def __init__(self, id, startingItems, operation, divisor, divisibleRecipient, notDivisibleRecipient, monkeyMap):
         self.id = id
         self.items = startingItems
         self.operation = operation
-        self.testCondn = testCondn
-        self.testConsq = testConsq
-        self.testAltrn = testAltrn
+        self.divisor = divisor
+        self.divisibleRecipient = divisibleRecipient
+        self.notDivisibleRecipient = notDivisibleRecipient
         self.monkeyMap = monkeyMap
         self.inspectionCount = 0
+        self.ceiling = None
     
     def inspectItems(self):
         # print(f"Monkey {self.id}")
@@ -18,15 +19,15 @@ class Monkey:
             # print(f"  Monkey inspects an item with a worry level of {item}")
             item = self.operation(item)
             # print(f"    Worry level increases to {item}")
-            item = item // 3
+            item = item % self.ceiling
             # print(f"    Monkey gets nbored with item. Worry level is divided by 3 to {item}")
             self.inspectionCount += 1
-            if item % self.testCondn == 0:
-                # print(f"    Current worry level is divisible by {self.testCondn}")
-                recipient = self.testConsq
+            if item % self.divisor == 0:
+                # print(f"    Current worry level is divisible by {self.divisor}")
+                recipient = self.divisibleRecipient
             else:
-                # print(f"    Current worry level is not divisible by {self.testCondn}")
-                recipient = self.testAltrn
+                # print(f"    Current worry level is not divisible by {self.divisor}")
+                recipient = self.notDivisibleRecipient
             # print(f"    Item with worry level {item} is thrown to monkey {recipient}")
             self.monkeyMap[recipient].acceptItem(item)
         self.items = []
@@ -59,10 +60,10 @@ def process(file):
         id = lines[l].replace("Monkey ", "").replace(":", "")
         startingItems = list(map(lambda s: int(s), lines[l + 1].replace("Starting items: ", "").split(", ")))
         operation = parseOperation(lines[l + 2].replace("Operation: ", ""))
-        testCondn = int(lines[l + 3].replace("Test: divisible by ", ""))
-        testConsq = lines[l + 4].replace("If true: throw to monkey ", "")
-        testAltrn = lines[l + 5].replace("If false: throw to monkey ", "")
-        monkey = Monkey(id, startingItems, operation, testCondn, testConsq, testAltrn, monkeyMap)
+        divisor = int(lines[l + 3].replace("Test: divisible by ", ""))
+        divisibleRecipient = lines[l + 4].replace("If true: throw to monkey ", "")
+        notDivisibleRecipient = lines[l + 5].replace("If false: throw to monkey ", "")
+        monkey = Monkey(id, startingItems, operation, divisor, divisibleRecipient, notDivisibleRecipient, monkeyMap)
         monkeyMap[monkey.id] = monkey
         l += 7
     return monkeyMap
@@ -70,18 +71,26 @@ def process(file):
 def calculateMonkeyBusiness(monkeys):
     return reduce(operator.mul, sorted(map(lambda m: m.inspectionCount, monkeys), reverse=True)[:2], 1)
 
-def simulateRounds(monkeys, numRounds):
-    for r in range(1, numRounds + 1):
+def simulateRounds(monkeys, numRounds, reduceWorry):
+    ceiling = reduce(operator.mul, map(lambda m: m.divisor, monkeys.values()))
+    for monkey in monkeys.values():
+        monkey.ceiling = ceiling
+
+    for _ in range(1, numRounds + 1):
         for monkey in monkeys.values():
             monkey.inspectItems()
+    
+    for monkey in monkeys.values():
+        print(f"Money {monkey.id} inspected items {monkey.inspectionCount} times")
 
         # print(f"After round {r}, the monkeys are holding items with these worry levels")
         # for monkey in monkeys.values():
         #     monkey.reportState()
+    
     return calculateMonkeyBusiness(monkeys.values())
 
 def solve(file):
     monkeys = process(file)
-    print(f"Part 1: {simulateRounds(monkeys, 20)}")
+    print(f"Part 2: {simulateRounds(monkeys, 10000)}")
 
-solve("inputs/11/small.txt")
+solve("inputs/11/full.txt")
