@@ -1,6 +1,6 @@
-def process(file):
+def parse(file):
     return [l.strip() for l in open(file).readlines()]
 
 def solve(file):
-    processed = process(file)
-    print(processed)
+    parsed = parse(file)
+    print(parsed)
