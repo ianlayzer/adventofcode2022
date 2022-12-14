@@ -24,15 +24,14 @@ AIR = "."
 ROCK = "#"
 SAND = "o"
 class Grid:
-    def __init__(self, paths):
+    def __init__(self, paths, isFloor):
+        self.isFloor = isFloor
         self.minX, self.maxX, self.minY, self.maxY = getBounds(paths)
         self.maxY += 2 # for floor
-        self.grid = [[AIR for _ in range(self.maxX + 1)] for _ in range(self.maxY + 1)]
-        self.height = len(self.grid)
-        self.width = len(self.grid[0])
+        self.rockPositions = set()
+        self.sandPositions = set()
         self.fillRock(paths)
-        self.sandX, self.sandY = 500, 0
-        self.grid[self.sandY][self.sandX] = "+"
+        self.sandSource = (500, 0)
     
     def fillRock(self, paths):
         for path in paths:
@@ -41,23 +40,22 @@ class Grid:
                 if startX and startY:
                     for y in range(min(startY, endY), max(startY, endY)+1):
                         for x in range(min(startX, endX), max(startX, endX)+1):
-                            self.grid[y][x] = ROCK
+                            self.rockPositions.add((x, y))
                 startX, startY = endX, endY
-        # fill in floor
-        for x in range(self.width):
-            self.grid[self.height - 1][x] = ROCK
 
     def getVal(self, x, y):
-        if x >= 0 and x < self.width and y >= 0 and y < self.height:
-            return self.grid[y][x]
+        if (x, y) in self.rockPositions or (self.isFloor and y == self.maxY):
+            return ROCK
+        elif (x, y) in self.sandPositions:
+            return SAND
         else:
-            return None
+            return AIR
 
     def simulate(self):
         def dropUnitOfSand():
             # drop grain of sand (sand falls +y)
-            currX, currY = self.sandX, self.sandY
-            while currY < self.height:
+            currX, currY = self.sandSource
+            while currY < self.maxY:
                 if self.getVal(currX, currY + 1) == AIR:
                     currY += 1
                 elif self.getVal(currX - 1, currY + 1) == AIR:
@@ -67,16 +65,14 @@ class Grid:
                     currY += 1
                     currX += 1
                 else:
-                    self.grid[currY][currX] = SAND
+                    self.sandPositions.add((currX, currY))
                     return (currX, currY)
             return None
         sandCount = 0
         restingPosition = True
-        while restingPosition and restingPosition != (self.sandX, self.sandY):
-            self.print()
+        while restingPosition and restingPosition != self.sandSource:
             restingPosition = dropUnitOfSand()
             if restingPosition:
-                print(restingPosition)
                 self.minX = min(self.minX, restingPosition[0])
                 self.maxX = max(self.maxX, restingPosition[0])
                 self.minY = min(self.minY, restingPosition[1])
@@ -85,12 +81,18 @@ class Grid:
         return sandCount
     
     def print(self):
-        for row in self.grid[:self.maxY+1]:
-            print("".join(row[self.minX:self.maxX+1]))
+        s = ""
+        for y in range(self.minY, self.maxY + 1):
+            for x in range(self.minX, self.maxX + 1):
+                s += self.getVal(x, y)
+            s += "\n"
+        print(s)
 
 def solve(file):
+    print(file)
     paths = parse(file)
-    grid = Grid(paths)
-    print(f"Part 1: {grid.simulate()}")
+    print(f"Part 1: {Grid(paths, False).simulate()}")
+    print(f"Part 2: {Grid(paths, True).simulate()}")
 
 solve("inputs/14/small.txt")
+solve("inputs/14/full.txt")
