@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import reduce
 
 class Valve:
     def __init__(self, id, flowRate, neighbors):
@@ -8,6 +9,18 @@ class Valve:
 
     def __repr__(self):
         return f"Valve(id={self.id}, flowRate={self.flowRate})"
+
+class State:
+    def __init__(self, currTime, currPressure, meValve, elValve, myTurn, activatedValves):
+        self.currTime = currTime
+        self.currPressure = currPressure
+        self.meValve = meValve
+        self.elValve = elValve
+        self.myTurn = myTurn
+        self.activatedValves = activatedValves
+
+    def __repr__(self):
+        return f"time:{self.currTime}, pressure:{self.currPressure}, me:{self.meValve.id},el:{self.elValve.id},turn:{self.myTurn},currTime:{self.currTime},activatedValves:{str(self.activatedValves)}"
 
 def parse(file):
     def parseLine(line):
@@ -22,67 +35,6 @@ def parse(file):
         tunnels = splt[1].split(", ")
         return Valve(valveId, flowRate, tunnels)
     return [parseLine(l.strip()) for l in open(file).readlines()]
-
-
-# class State:
-#     def __init__(self, meValve, elephantValve, turn, currTime, activatedValves):
-#         self.meValve = meValve
-#         self.elephantValve = elephantValve
-#         self.turn = turn
-#         self.currTime = currTime
-#         self.activatedValves = activatedValves
-
-#     def __repr__(self):
-#         return f"me:{self.meValve.id},eleph:{self.elephantValve.id},turn:{self.turn},currTime:{self.currTime},activatedValves:{str(self.activatedValves)}"
-
-# class Game:
-#     def __init__(self, valves):
-#         self.idToValve = {}
-#         for valve in valves:
-#             self.idToValve[valve.id] = valve
-#         self.currentState = State(self.idToValve["AA"], self.idToValve["AA"], True, 1, set())
-
-def maximizePressureWithElephant(valves, totalTime):
-    idToValve = {}
-    for valve in valves:
-        idToValve[valve.id] = valve
-
-    def search2(me, eleph, myTurn, currTime, activatedValves, mem):
-            if currTime == totalTime:
-                return 0
-
-            stateString = f"me:{me.id},eleph:{eleph.id},myTurn:{myTurn},currTime:{currTime},activatedValves:{str(activatedValves)}"
-            if stateString in mem:
-                return mem[stateString]
-
-            myBestPressure = 0
-            elephBestPressure = 0
-            if myTurn:
-                if me.id not in activatedValves and me.flowRate > 0:
-                    pressureFromCurr = (totalTime - currTime) * me.flowRate
-                    activatedValves.add(me.id)
-                    myBestPressure = max(myBestPressure, pressureFromCurr + search2(me, eleph, False, currTime, activatedValves, mem))
-                    activatedValves.remove(me.id)
-                for neighborId in me.neighbors:
-                    neighbor = idToValve[neighborId]
-                    myBestPressure = max(myBestPressure, search2(neighbor, eleph, False, currTime, activatedValves, mem))
-                
-            else:
-                if eleph.id not in activatedValves and eleph.flowRate > 0:
-                    pressureFromCurr = (totalTime - currTime) * eleph.flowRate
-                    activatedValves.add(eleph.id)
-                    elephBestPressure = max(elephBestPressure,  pressureFromCurr + search2(me, eleph, True, currTime + 1, activatedValves, mem))
-                    activatedValves.remove(eleph.id)                
-                for neighborId in eleph.neighbors:
-                    neighbor = idToValve[neighborId]
-                    elephBestPressure = max(elephBestPressure, search2(me, neighbor, True, currTime + 1, activatedValves, mem))
-            
-            
-            bestPressure = myBestPressure + elephBestPressure
-            mem[stateString] = bestPressure
-            return bestPressure   
-
-    return search2(idToValve["AA"], idToValve["AA"], True, 1, set(), {}) 
 
 def maximizePressure(valves, totalTime):
     idToValve = {}
@@ -110,6 +62,51 @@ def maximizePressure(valves, totalTime):
         return bestPressure
 
     return search(idToValve["AA"], 1, set(), defaultdict(lambda: defaultdict(dict)))
+
+
+def maximizePressureWithElephant(valves, totalTime):
+    CUTOFF = 500000
+    idToValve = {}
+    for valve in valves:
+        idToValve[valve.id] = valve
+
+    def getNextStates(state):
+        nextStates = set()
+        if state.myTurn:
+            currValve = state.meValve
+            newTime = state.currTime
+        else:
+            currValve = state.elValve
+            newTime = state.currTime + 1
+
+        # open current valve
+        if currValve.flowRate > 0 and currValve.id not in state.activatedValves:
+            newPressure = state.currPressure + (totalTime - state.currTime) * currValve.flowRate
+            newActivatedValves = state.activatedValves.copy()
+            newActivatedValves.add(currValve.id)
+            nextStates.add(State(newTime, newPressure, state.meValve, state.elValve, not state.myTurn, newActivatedValves))
+        # travel to new valves
+        for neighborId in currValve.neighbors:
+            neighborValve = idToValve[neighborId]
+            if state.myTurn:
+                newMeValve = neighborValve
+                newElValve = state.elValve
+            else:
+                newMeValve = state.meValve
+                newElValve = neighborValve 
+            nextStates.add(State(newTime, state.currPressure, newMeValve, newElValve, not state.myTurn, state.activatedValves.copy()))
+        return nextStates
+
+    currStates = set([State(1, 0, idToValve["AA"], idToValve["AA"], True, set())])
+    while next(iter(currStates)).currTime < totalTime:
+        print(next(iter(currStates)).currTime)
+        nextStates = set()
+        for currState in currStates:
+            for nextState in getNextStates(currState):
+                nextStates.add(nextState) 
+        currStates = sorted(list(nextStates), key=lambda s:s.currPressure, reverse=True)[:CUTOFF]
+    
+    return max(map(lambda s: s.currPressure, currStates))
 
 def solve(file):
     valves = parse(file)
